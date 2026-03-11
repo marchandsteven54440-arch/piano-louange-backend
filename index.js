@@ -139,8 +139,21 @@ async function fetchLyricsFromGenius(title, artist) {
       // scraping échoué
     }
 
+    // Fallback : lyrics.ovh si Genius scraping échoue
     if (!lyrics || lyrics.length < 50) {
-      return { found: false, reason: 'Paroles introuvables sur Genius' };
+      try {
+        const ovhRes = await axios.get(
+          `https://api.lyrics.ovh/v1/${encodeURIComponent(bestMatch.artist)}/${encodeURIComponent(bestMatch.title)}`,
+          { timeout: 8000 }
+        );
+        if (ovhRes.data?.lyrics && ovhRes.data.lyrics.length > 50) {
+          lyrics = ovhRes.data.lyrics;
+        }
+      } catch (e) {}
+    }
+
+    if (!lyrics || lyrics.length < 50) {
+      return { found: false, reason: 'Paroles introuvables (Genius + lyrics.ovh)' };
     }
 
     return {
@@ -286,3 +299,4 @@ app.get('/api/cache/stats', (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`🎹 Piano Louange Backend v3.0 démarré sur le port ${PORT}`));
+
