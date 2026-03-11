@@ -113,15 +113,34 @@ async function fetchLyricsFromGenius(title, artist) {
       return { found: false, reason: `Similarité trop faible: ${Math.round(bestScore)}%` };
     }
 
-    // Récupérer paroles via API officielle
-    const songRes = await axios.get(`https://api.genius.com/songs/${bestMatch.id}?text_format=plain`, {
-      headers: { Authorization: `Bearer ${KEY}` },
-      timeout: 8000
-    });
+    // Récupérer paroles via scraping HTML de la page Genius
+    let lyrics = null;
+    try {
+      const pageRes = await axios.get(bestMatch.url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+        },
+        timeout: 10000
+      });
+      const $ = cheerio.load(pageRes.data);
+      const parts = [];
+      $('[data-lyrics-container="true"]').each((i, el) => {
+        const html = $(el).html();
+        const text = html
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<[^>]+>/g, '')
+          .trim();
+        if (text) parts.push(text);
+      });
+      if (parts.length > 0) lyrics = parts.join('\n\n');
+    } catch (e) {
+      // scraping échoué
+    }
 
-    const lyrics = songRes.data?.response?.song?.lyrics?.plain;
     if (!lyrics || lyrics.length < 50) {
-      return { found: false, reason: 'Paroles absentes ou trop courtes dans Genius API' };
+      return { found: false, reason: 'Paroles introuvables sur Genius' };
     }
 
     return {
